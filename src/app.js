@@ -13,6 +13,27 @@ const balanceRoutes = require('./routes/balanceRoutes');
 const { startSyncJob } = require('./jobs/syncJob');
 
 const app = express();
+
+app.use((req, res, next) => {
+  const allowed = [
+    'http://localhost:3001',
+    process.env.FRONTEND_URL, // set this in Vercel env vars
+  ].filter(Boolean);
+
+  const origin = req.headers.origin;
+  if (allowed.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-hcm-api-key,Idempotency-Key');
+
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+app.use(express.json());
+app.use(generalLimiter);
+
 app.use(express.json());
 app.use(generalLimiter);
 
@@ -32,12 +53,6 @@ app.use((req, res) =>
 
 app.use(errorHandler);
 
-async function start() {
-  await connectDB();
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => console.log(`[APP] Running on port ${PORT}`));
-  if (process.env.NODE_ENV !== 'test') startSyncJob();
-}
 
 if (require.main === module) {
   start().catch((err) => { console.error('[APP] Failed to start:', err); process.exit(1); });
