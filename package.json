@@ -1,0 +1,35 @@
+{
+  "name": "time-off-microservices",
+  "version": "1.0.0",
+  "description": "ReadyOn Time-Off Microservice — manages time-off request lifecycle and HCM balance sync",
+  "main": "src/app.js",
+   "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "mock-hcm": "node hcm/server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run mock-hcm\"",
+    "test": "jest --runInBand --forceExit",
+    "test:unit": "jest tests/unit --runInBand --forceExit",
+    "test:integration": "jest tests/integration --runInBand --forceExit",
+    "test:e2e": "jest tests/e2e --runInBand --forceExit",
+    "test:coverage": "jest --coverage --runInBand --forceExit"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.15.2",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.4.1",
+    "mongoose": "^9.5.0",
+    "node-cron": "^4.2.1",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "jest": "^30.3.0",
+    "mongodb-memory-server": "^11.0.1",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
+  }
+}
