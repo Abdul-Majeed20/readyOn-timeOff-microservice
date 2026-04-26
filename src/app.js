@@ -53,6 +53,12 @@ app.use((req, res) =>
 
 app.use(errorHandler);
 
+async function start() {
+  await connectDB();
+  const PORT = process.env.PORT || 3000;
+  // app.listen(PORT, () => console.log(`[APP] Running on port ${PORT}`));
+  if (process.env.NODE_ENV !== 'test') startSyncJob();
+}
 
 if (require.main === module) {
   start().catch((err) => { console.error('[APP] Failed to start:', err); process.exit(1); });
