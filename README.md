@@ -9,39 +9,89 @@ Built with **Node.js**, **Express.js**, **MongoDB**, and **React**.
 ## Project Structure
 
 ```
-time-off-microservice/       ← Backend
+time-off-microservice/                    ← Backend
 ├── src/
-│   ├── config/database.js   # MongoDB connection
-│   ├── models/              # Mongoose schemas (Balance, Request, SyncLog)
-│   ├── services/            # Business logic (balance sync, request lifecycle)
-│   ├── controllers/         # Route handlers
-│   ├── routes/              # Express routes
-│   ├── middleware/          # Auth, error handling, rate limiting
-│   ├── jobs/syncJob.js      # Scheduled HCM sync (every 15 min)
-│   └── app.js               # App entry point (port 3000)
-├── mock-hcm/                ← Simulated HCM server (port 4000)
-│   ├── data/store.js        # In-memory balance store
-│   ├── routes/hcm.routes.js # Fake Workday API endpoints
-│   └── server.js
-├── tests/
-│   ├── unit/                # Isolated function tests
-│   ├── integration/         # API + DB + mock HCM tests
-│   └── e2e/                 # Full user journey tests
-├── .env.example
+│   ├── config/
+│   │   └── database.js                  
+│   │
+│   ├── models/
+│   │   ├── Balance.js                   
+│   │   ├── TimeOffRequest.js            
+│   │   ├── SyncLog.js                   
+│   │   ├── Company.js                   — stores company + join code
+│   │   └── User.js                      — real users with hashed passwords
+│   │
+│   ├── services/
+│   │   ├── hcmClient.js                 
+│   │   ├── balanceService.js            
+│   │   ├── requestService.js           
+│   │   └── authService.js              — register, login, token logic
+│   │
+│   ├── controllers/
+│   │   ├── requestController.js         
+│   │   ├── balanceController.js         
+│   │   └── authController.js           — signup/login/me endpoints
+│   │
+│   ├── routes/
+│   │   ├── timeOffRoutes.js            
+│   │   ├── balanceRoutes.js            
+│   │   └── authRoutes.js              
+│   │
+│   ├── middleware/
+│   │   ├── errorHandler.js              
+│   │   ├── rateLimiter.js               
+│   │   └── auth.js                      — now verifies real JWT
+│   │
+│   ├── jobs/syncJob.js                 
+│   └── app.js                          — registers auth routes
+│
+├── hcm/                            
+├── tests/                               
+├── .env.example                        — adds JWT_SECRET, BCRYPT_ROUNDS
 └── README.md
 
-time-off-frontend/           ← React frontend (port 3001)
+time-off-frontend/                       ← Frontend
 ├── src/
-│   ├── api/index.js         # All backend calls in one place
-│   ├── context/             # AuthContext, ToastContext
-│   ├── hooks/useFetch.js    # Reusable data-fetching hook
-│   ├── components/          # Sidebar, Modal, StatusBadge
+│   ├── api/
+│   │   └── index.js                    — Bearer token on all calls
+│   │
+│   ├── context/
+│   │   ├── AuthContext.js              — real login/logout/register
+│   │   └── ToastContext.js              
+│   │
+│   ├── hooks/
+│   │   └── useFetch.js                  
+│   │
+│   ├── utils/
+│   │   └── index.js                     
+│   │
+│   ├── components/
+│   │   ├── layout/
+│   │   │   └── Sidebar.js              — shows real user name/company
+│   │   └── ui/
+│   │       ├── StatusBadge.js           
+│   │       └── Modal.js                 
+│   │
 │   ├── pages/
-│   │   ├── LoginPage.js
-│   │   ├── employee/        # Dashboard, NewRequest, Balance
-│   │   └── manager/         # Dashboard, AllRequests
-│   └── App.js               # Routes + layout
-└── package.json
+│   │   ├── LoginPage.js                — real email/password form
+│   │   ├── RegisterPage.js             — employee registration with company code
+│   │   ├── CompanySignupPage.js        — company admin registration
+│   │   │
+│   │   ├── employee/
+│   │   │   ├── EmployeeDashboard.js    — uses real user data
+│   │   │   ├── NewRequestPage.js        
+│   │   │   └── BalancePage.js           
+│   │   │
+│   │   └── manager/
+│   │       ├── ManagerDashboard.js     — fetches company employees
+│   │       ├── AllRequestsPage.js      — fetches company employees
+│   │       └── TeamPage.js             — manage employees, assign roles
+│   │
+│   ├── App.js                          — adds new routes
+│   ├── index.js                         
+│   └── index.css                       — new page styles
+│
+└── package.json                         
 ```
 
 ---
@@ -103,19 +153,26 @@ Frontend runs on → `http://localhost:3001`
 
 ---
 
-### 3. Demo Login
+### 3. Project flow
 
-No real authentication is needed. On the login screen, pick any demo user:
-
-| Name | Role | Employee ID |
-|------|------|-------------|
-| Alex Johnson | Employee | emp_001 |
-| Maria Garcia | Employee | emp_002 |
-| Sam Patel | Employee | emp_003 |
-| Chris Lee | Employee | emp_004 |
-| Jordan Taylor | Manager | mgr_001 |
+Company Admin signs up
+        ↓
+Gets a unique Company Code (e.g. WIZDA-4X9K)
+        ↓
+Shares code with employees
+        ↓
+Employees register using that code
+        ↓
+Admin assigns manager role to specific employees
+        ↓
+Everyone logs in with email + password
+        ↓
+JWT token issued → stored in localStorage
+        ↓
+All API calls use Bearer token in header
 
 ---
+
 
 ## Running Tests
 
