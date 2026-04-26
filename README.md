@@ -1,60 +1,140 @@
-# Time-Off Microservice
+# ReadyOn — Time-Off Microservice
 
-A backend microservice for managing employee time-off requests and keeping leave balances in sync with an HCM system (e.g. Workday, SAP).
+A full-stack leave management system. Employees request time off, managers approve or reject, and balances stay in sync with an external HCM system (e.g. Workday, SAP) in real time.
 
-Built with **Node.js**, **Express.js**, and **MongoDB**.
+Built with **Node.js**, **Express.js**, **MongoDB**, and **React**.
+
+---
+
+## Project Structure
+
+```
+time-off-microservice/       ← Backend
+├── src/
+│   ├── config/database.js   # MongoDB connection
+│   ├── models/              # Mongoose schemas (Balance, Request, SyncLog)
+│   ├── services/            # Business logic (balance sync, request lifecycle)
+│   ├── controllers/         # Route handlers
+│   ├── routes/              # Express routes
+│   ├── middleware/          # Auth, error handling, rate limiting
+│   ├── jobs/syncJob.js      # Scheduled HCM sync (every 15 min)
+│   └── app.js               # App entry point (port 3000)
+├── mock-hcm/                ← Simulated HCM server (port 4000)
+│   ├── data/store.js        # In-memory balance store
+│   ├── routes/hcm.routes.js # Fake Workday API endpoints
+│   └── server.js
+├── tests/
+│   ├── unit/                # Isolated function tests
+│   ├── integration/         # API + DB + mock HCM tests
+│   └── e2e/                 # Full user journey tests
+├── .env.example
+└── README.md
+
+time-off-frontend/           ← React frontend (port 3001)
+├── src/
+│   ├── api/index.js         # All backend calls in one place
+│   ├── context/             # AuthContext, ToastContext
+│   ├── hooks/useFetch.js    # Reusable data-fetching hook
+│   ├── components/          # Sidebar, Modal, StatusBadge
+│   ├── pages/
+│   │   ├── LoginPage.js
+│   │   ├── employee/        # Dashboard, NewRequest, Balance
+│   │   └── manager/         # Dashboard, AllRequests
+│   └── App.js               # Routes + layout
+└── package.json
+```
 
 ---
 
 ## Quick Start
 
-### 1. Install dependencies
+### Prerequisites
+- Node.js 18+
+- MongoDB running locally (`mongodb://localhost:27017`)
+
+---
+
+### 1. Backend Setup
+
 ```bash
+cd time-off-microservice
+
+# Install dependencies
 npm install
-```
 
-### 2. Set up environment variables
-```bash
+# Set up environment variables
 cp .env.example .env
-```
-Edit `.env` with your MongoDB URI and other settings.
+# Edit .env with your MongoDB URI if different from default
 
-### 3. Run both servers together (recommended)
-```bash
+# Run backend + mock HCM together
 npm run dev:all
 ```
 
 This starts:
-- **Time-Off Microservice** on `http://localhost:3000`
-- **Mock HCM Server** on `http://localhost:4000`
+- **Time-Off Microservice** → `http://localhost:3000`
+- **Mock HCM Server** → `http://localhost:4000`
 
 Or run them separately:
 ```bash
-# Terminal 1 — Main microservice
+# Terminal 1
 npm run dev
 
-# Terminal 2 — Mock HCM
+# Terminal 2
 npm run mock-hcm
 ```
+
+---
+
+### 2. Frontend Setup
+
+```bash
+cd time-off-frontend
+
+# Install dependencies
+npm install
+
+# Start the React app
+npm start
+```
+
+Frontend runs on → `http://localhost:3001`
+
+> The frontend proxies all `/api` calls to `http://localhost:3000` automatically. Make sure the backend is running first.
+
+---
+
+### 3. Demo Login
+
+No real authentication is needed. On the login screen, pick any demo user:
+
+| Name | Role | Employee ID |
+|------|------|-------------|
+| Alex Johnson | Employee | emp_001 |
+| Maria Garcia | Employee | emp_002 |
+| Sam Patel | Employee | emp_003 |
+| Chris Lee | Employee | emp_004 |
+| Jordan Taylor | Manager | mgr_001 |
 
 ---
 
 ## Running Tests
 
 ```bash
+cd time-off-microservice
+
 # Run all tests
 npm test
 
-# Run only unit tests (no DB or HTTP needed)
+# Unit tests only (no DB or HTTP needed)
 npm run test:unit
 
-# Run only integration tests
+# Integration tests only
 npm run test:integration
 
-# Run only E2E tests
+# E2E tests only
 npm run test:e2e
 
-# Run with coverage report
+# With coverage report
 npm run test:coverage
 ```
 
@@ -129,7 +209,7 @@ For idempotency, add header: `Idempotency-Key: your-unique-key`
 
 ## Seeded Test Data
 
-The Mock HCM starts with these balances:
+The Mock HCM starts with these balances out of the box:
 
 | Employee | Location | Days |
 |----------|----------|------|
@@ -141,24 +221,15 @@ The Mock HCM starts with these balances:
 
 ---
 
-## Project Structure
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust as needed:
 
 ```
-time-off-microservice/
-├── src/
-│   ├── config/database.js        # MongoDB connection
-│   ├── models/                   # Mongoose schemas
-│   ├── services/                 # Business logic
-│   ├── controllers/              # Route handlers
-│   ├── routes/                   # Express routes
-│   ├── middleware/               # Auth, errors, rate limiting
-│   ├── jobs/syncJob.js           # Scheduled HCM sync
-│   └── app.js                    # App entry point
-├── mock-hcm/                     # Simulated HCM server
-├── tests/
-│   ├── unit/                     # Function-level tests
-│   ├── integration/              # API + DB tests
-│   └── e2e/                      # Full journey tests
-├── .env.example
-└── README.md
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/timeoff_db
+HCM_BASE_URL=http://localhost:4000
+HCM_API_KEY=hcm-secret-key-12345
+JWT_SECRET=super-secret-jwt-key-change-in-production
+SYNC_CRON=*/15 * * * *
 ```
