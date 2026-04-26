@@ -13,7 +13,7 @@ const LOCATIONS = [
 export default function BalancePage() {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [locationId, setLocationId] = useState(user.location || 'loc_NY');
+  const [locationId, setLocationId] = useState(user.locationId || 'loc_NY');
   const [syncing, setSyncing] = useState(false);
 
   const { data: balance, loading: balLoading, error: balError, refetch: refetchBalance } = useFetch(

@@ -1,36 +1,35 @@
+const jwt = require('jsonwebtoken');
+
 /**
- * Auth Middleware
- * In a real system this would verify a JWT token from the Authorization header.
- * For this assessment we simulate it — the client passes employeeId and role
- * in headers so tests are simple and focused on business logic.
- *
- * Header format:
- *   x-employee-id: emp_001
- *   x-role: employee | manager
+ * Verifies the Bearer JWT token in the Authorization header.
+ * Attaches decoded payload to req.user.
  */
-
 function authenticate(req, res, next) {
-  const employeeId = req.headers['x-employee-id'];
-  console.log("EmployeeId: ",employeeId)
-  const role = req.headers['x-role'] || 'employee';
-
-  if (!employeeId) {
-    return res.status(401).json({
-      error: 'UNAUTHORIZED',
-      message: 'Missing x-employee-id header',
-    });
+  const header = req.headers['authorization'];
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Missing or invalid Authorization header' });
   }
 
-  req.user = { employeeId, role };
-  next();
+  const token = header.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+    req.user = payload; // { userId, employeeId, companyId, role }
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Token expired or invalid' });
+  }
 }
 
 function requireManager(req, res, next) {
-  if (req.user?.role !== 'manager') {
-    return res.status(403).json({
-      error: 'FORBIDDEN',
-      message: 'This action requires manager role',
-    });
+  if (!['manager', 'admin'].includes(req.user?.role)) {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Manager or admin role required' });
+  }
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin role required' });
   }
   next();
 }
@@ -38,12 +37,9 @@ function requireManager(req, res, next) {
 function requireHcmKey(req, res, next) {
   const key = req.headers['x-hcm-api-key'];
   if (!key || key !== process.env.HCM_API_KEY) {
-    return res.status(401).json({
-      error: 'UNAUTHORIZED',
-      message: 'Invalid or missing HCM API key',
-    });
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid or missing HCM API key' });
   }
   next();
 }
 
-module.exports = { authenticate, requireManager, requireHcmKey };
+module.exports = { authenticate, requireManager, requireAdmin, requireHcmKey };

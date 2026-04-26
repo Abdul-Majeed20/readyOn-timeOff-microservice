@@ -1,21 +1,27 @@
 const requestService = require('../services/requestService');
+const User = require('../models/User');
 
 async function createRequest(req, res, next) {
   try {
-    const { employeeId } = req.user;
+    // employeeId and locationId come from the JWT payload (set in authService.signToken)
+    const { employeeId, locationId: tokenLocation } = req.user;
+    console.log(`employeeId: ${employeeId}`)
     const { locationId, days, startDate, endDate, reason } = req.body;
     const idempotencyKey = req.headers['idempotency-key'];
 
-    if (!locationId || !days || !startDate || !endDate) {
+    if (!days || !startDate || !endDate) {
       return res.status(400).json({
         error: 'BAD_REQUEST',
-        message: 'locationId, days, startDate, and endDate are required',
+        message: 'days, startDate, and endDate are required',
       });
     }
 
+    // Use body locationId if provided, otherwise fall back to the user's registered location
+    const resolvedLocation = locationId || tokenLocation;
+
     const { request, duplicate } = await requestService.createRequest({
       employeeId,
-      locationId,
+      locationId: resolvedLocation,
       days: Number(days),
       startDate,
       endDate,
@@ -36,9 +42,10 @@ async function getEmployeeRequests(req, res, next) {
   try {
     const { employeeId } = req.params;
     const { status, page, limit } = req.query;
+    const { role, employeeId: tokenEmployeeId } = req.user;
 
-    // Employees can only see their own; managers can see anyone's
-    if (req.user.role !== 'manager' && req.user.employeeId !== employeeId) {
+    // Employees can only see their own requests; managers and admins can see anyone's
+    if (role === 'employee' && tokenEmployeeId !== employeeId) {
       return res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied' });
     }
 

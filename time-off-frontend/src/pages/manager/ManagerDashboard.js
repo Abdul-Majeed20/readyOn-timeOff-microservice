@@ -1,38 +1,39 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useFetch } from '../../hooks/useFetch';
-import { getMyRequests, approveRequest, rejectRequest } from '../../api';
+import { apiGetTeam, getMyRequests, approveRequest, rejectRequest } from '../../api';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { formatDate, daysLabel, getErrorMessage } from '../../utils';
-import { useState } from 'react';
 import Modal from '../../components/ui/Modal';
-
-// All employees the manager oversees
-const MANAGED_EMPLOYEES = ['emp_001', 'emp_002', 'emp_003', 'emp_004'];
+import { formatDate, daysLabel, getErrorMessage } from '../../utils';
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [actionTarget, setActionTarget] = useState(null); // { request, type: 'approve'|'reject' }
+  const [actionTarget, setActionTarget] = useState(null);
   const [notes, setNotes] = useState('');
   const [acting, setActing] = useState(false);
 
-  // Fetch all requests across all managed employees
-  const { data, loading, refetch } = useFetch(async () => {
+  // First fetch team members, then their requests
+  const { data: teamData, loading: teamLoading } = useFetch(apiGetTeam, []);
+
+  const { data: allRequests, loading: reqLoading, refetch } = useFetch(async () => {
+    const team = teamData?.users || [];
+    if (!team.length) return [];
     const results = await Promise.all(
-      MANAGED_EMPLOYEES.map(id => getMyRequests(id).then(d => d.requests))
+      team.map(u => getMyRequests(u.employeeId).then(d => d.requests.map(r => ({ ...r, userName: u.name }))))
     );
     return results.flat().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, []);
+  }, [teamData]);
 
-  const allRequests = data || [];
-  const pending  = allRequests.filter(r => r.status === 'PENDING');
-  const approved = allRequests.filter(r => r.status === 'APPROVED').length;
-  const rejected = allRequests.filter(r => r.status === 'REJECTED').length;
+  const requests = allRequests || [];
+  const pending  = requests.filter(r => r.status === 'PENDING');
+  const approved = requests.filter(r => r.status === 'APPROVED').length;
+  const rejected = requests.filter(r => r.status === 'REJECTED').length;
+  const loading  = teamLoading || reqLoading;
 
   async function handleAction() {
-    if (!actionTarget) return;
     setActing(true);
     try {
       if (actionTarget.type === 'approve') {
@@ -55,8 +56,8 @@ export default function ManagerDashboard() {
   return (
     <>
       <div className="page-header">
-        <h2>Manager Dashboard</h2>
-        <p>Welcome, {user.name}. Review and action pending requests below.</p>
+        <h2>Dashboard</h2>
+        <p>Welcome, {user.name}. Review pending requests and team activity below.</p>
       </div>
 
       {/* Stats */}
@@ -77,9 +78,9 @@ export default function ManagerDashboard() {
           <div className="stat-sub">this period</div>
         </div>
         <div className="stat-card purple">
-          <div className="stat-label">Total Requests</div>
-          <div className="stat-value" style={{ color: 'var(--purple)' }}>{allRequests.length}</div>
-          <div className="stat-sub">all employees</div>
+          <div className="stat-label">Team Size</div>
+          <div className="stat-value" style={{ color: 'var(--purple)' }}>{teamData?.users?.length ?? '—'}</div>
+          <div className="stat-sub">members</div>
         </div>
       </div>
 
@@ -88,12 +89,7 @@ export default function ManagerDashboard() {
         <Link to="/manager/requests" className="btn btn-ghost btn-sm">View All →</Link>
       </div>
 
-      {/* Pending requests */}
-      {loading && (
-        <div className="loading-screen" style={{ height: '200px' }}>
-          <div className="spinner" /><span style={{ fontSize: '0.85rem' }}>Loading...</span>
-        </div>
-      )}
+      {loading && <div className="loading-screen" style={{ height: '180px' }}><div className="spinner" /></div>}
 
       {!loading && pending.length === 0 && (
         <div className="card">
@@ -105,46 +101,30 @@ export default function ManagerDashboard() {
         </div>
       )}
 
-      {!loading && pending.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {pending.map(r => (
-            <div key={r.requestId} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              {/* Employee avatar */}
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent)', flexShrink: 0 }}>
-                {r.employeeId.slice(-3).toUpperCase()}
-              </div>
-
-              {/* Info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-                  {r.employeeId}
-                  <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>{r.requestId}</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  <strong style={{ color: 'var(--amber)' }}>{daysLabel(r.days)}</strong>
-                  {' · '}{formatDate(r.startDate)} → {formatDate(r.endDate)}
-                  {' · '}{r.locationId}
-                </div>
-                {r.reason && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem', fontStyle: 'italic' }}>"{r.reason}"</div>}
-              </div>
-
-              <StatusBadge status={r.status} />
-
-              {/* Action buttons */}
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="btn btn-success btn-sm" onClick={() => { setActionTarget({ request: r, type: 'approve' }); setNotes(''); }}>
-                  ✓ Approve
-                </button>
-                <button className="btn btn-danger btn-sm" onClick={() => { setActionTarget({ request: r, type: 'reject' }); setNotes(''); }}>
-                  ✕ Reject
-                </button>
-              </div>
+      {!loading && pending.map(r => (
+        <div key={r.requestId} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid rgba(108,138,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
+            {(r.userName || r.employeeId).slice(0, 2).toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+              {r.userName || r.employeeId}
+              <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>{r.requestId}</span>
             </div>
-          ))}
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              <strong style={{ color: 'var(--amber)' }}>{daysLabel(r.days)}</strong>
+              {' · '}{formatDate(r.startDate)} → {formatDate(r.endDate)}
+              {r.reason && <em style={{ marginLeft: '0.5rem' }}>"{r.reason}"</em>}
+            </div>
+          </div>
+          <StatusBadge status={r.status} />
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="btn btn-success btn-sm" onClick={() => { setActionTarget({ request: r, type: 'approve' }); setNotes(''); }}>✓ Approve</button>
+            <button className="btn btn-danger btn-sm"  onClick={() => { setActionTarget({ request: r, type: 'reject' });  setNotes(''); }}>✕ Reject</button>
+          </div>
         </div>
-      )}
+      ))}
 
-      {/* Action modal */}
       {actionTarget && (
         <Modal
           title={actionTarget.type === 'approve' ? 'Approve Request' : 'Reject Request'}
@@ -152,23 +132,20 @@ export default function ManagerDashboard() {
           footer={
             <>
               <button className="btn btn-ghost" onClick={() => setActionTarget(null)}>Cancel</button>
-              <button
-                className={`btn ${actionTarget.type === 'approve' ? 'btn-success' : 'btn-danger'}`}
-                onClick={handleAction} disabled={acting}
-              >
-                {acting ? <span className="spinner" /> : actionTarget.type === 'approve' ? '✓ Confirm Approve' : '✕ Confirm Reject'}
+              <button className={`btn ${actionTarget.type === 'approve' ? 'btn-success' : 'btn-danger'}`} onClick={handleAction} disabled={acting}>
+                {acting ? <span className="spinner" /> : actionTarget.type === 'approve' ? '✓ Confirm' : '✕ Confirm'}
               </button>
             </>
           }
         >
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            {actionTarget.type === 'approve' ? 'Approving' : 'Rejecting'} request for{' '}
+            {actionTarget.type === 'approve' ? 'Approving' : 'Rejecting'}{' '}
             <strong style={{ color: 'var(--text-primary)' }}>{daysLabel(actionTarget.request.days)}</strong>{' '}
-            by <strong style={{ color: 'var(--text-primary)' }}>{actionTarget.request.employeeId}</strong>
+            for <strong style={{ color: 'var(--text-primary)' }}>{actionTarget.request.userName || actionTarget.request.employeeId}</strong>
           </p>
           <div className="form-group">
-            <label className="form-label">{actionTarget.type === 'approve' ? 'Notes' : 'Reason'} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-            <textarea className="form-input" rows={3} placeholder={actionTarget.type === 'approve' ? 'Any notes for the employee...' : 'Why is this being rejected?'} value={notes} onChange={e => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
+            <label className="form-label">{actionTarget.type === 'approve' ? 'Notes' : 'Reason'} (optional)</label>
+            <textarea className="form-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
           </div>
         </Modal>
       )}

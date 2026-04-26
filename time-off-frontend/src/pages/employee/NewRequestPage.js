@@ -16,7 +16,7 @@ export default function NewRequestPage() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    locationId: user.location || 'loc_NY',
+    locationId: user.locationId || 'loc_NY',
     days: '',
     startDate: '',
     endDate: '',
